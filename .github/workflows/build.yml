@@ -88,6 +88,10 @@ jobs:
 
       - name: Apply Kubernetes manifests
         run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          NAMESPACE=$(echo "$REPO_NAME" | sed 's/-site$//')
+          echo "Deleting existing deployment to handle label changes..."
+          kubectl delete deployment customer-site -n "$NAMESPACE" --ignore-not-found
           echo "Applying manifests to cluster..."
           kubectl apply -f infra/deployment.yaml
           echo "✅ Manifests applied"
