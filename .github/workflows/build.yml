@@ -79,7 +79,7 @@ jobs:
           
           # Calculate NAMESPACE (repo name without -site suffix)
           REPO_NAME="${{ github.event.repository.name }}"
-          NAMESPACE="${REPO_NAME}"
+          NAMESPACE="${REPO_NAME%-site}"
           echo "Using namespace: $NAMESPACE"
           
           sed -i "s/{{NAMESPACE}}/$NAMESPACE/g" infra/deployment.yaml
