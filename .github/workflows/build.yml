@@ -9,10 +9,6 @@ env:
   REGISTRY: registry.scaleweb.dk
   IMAGE_NAME: customer-site-${{ github.event.repository.name }}
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build-and-push:
     name: Build and Push
