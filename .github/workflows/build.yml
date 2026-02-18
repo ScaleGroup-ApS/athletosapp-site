@@ -1,0 +1,128 @@
+name: Scaleweb.dk Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: registry.scaleweb.dk
+  IMAGE_NAME: customer-site-${{ github.event.repository.name }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-push:
+    name: Build and Push
+    runs-on: [self-hosted, ARM64, hetzner-hel1]
+    outputs:
+      short-sha: ${{ steps.meta.outputs.short-sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-8)
+          echo "short-sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Building image with tag: ${SHORT_SHA}"
+
+      - name: Log in to the Container registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+      - name: Build and push image
+        run: |
+          docker buildx build \
+            --file ./Dockerfile \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.short-sha }} \
+            --push \
+            --label org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            --label org.opencontainers.image.created=${{ github.event.head_commit.timestamp }} \
+            .
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: [self-hosted, ARM64, hetzner-hel1]
+    needs: build-and-push
+    if: needs.build-and-push.result == 'success'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Setup kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Prepare manifests
+        run: |
+          sed -i "s/{{CUSTOMER_SLUG}}/${{ github.event.repository.name }}/g" infra/deployment.yaml
+          sed -i "s/{{CUSTOMER_ID}}/${{ github.event.repository.name }}/g" infra/deployment.yaml
+
+      - name: Apply Kubernetes manifests
+        run: |
+          echo "Applying manifests to cluster..."
+          kubectl apply -f infra/deployment.yaml
+          echo "✅ Manifests applied"
+
+      - name: Deploy with image tags
+        env:
+          SHORT_SHA: ${{ needs.build-and-push.outputs.short-sha }}
+        run: |
+          echo "Deploying with image tag: ${SHORT_SHA}"
+
+          kubectl set image deployment/customer-site \
+            customer-site=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA} \
+            -n ${{ github.event.repository.name }}
+
+          echo "Waiting for rollouts..."
+          kubectl rollout status deployment/customer-site -n ${{ github.event.repository.name }} --timeout=5m
+
+          echo "All deployments rolled out successfully"
+
+  notify:
+    name: Notify Deployment
+    runs-on: [self-hosted, ARM64, hetzner-hel1]
+    needs: [build-and-push, deploy]
+    if: always()
+    steps:
+      - name: Notify success
+        if: needs.build-and-push.result == 'success' && needs.deploy.result == 'success'
+        run: |
+          echo "✅ All images built, pushed, and deployed successfully!"
+          echo "Images available at:"
+          echo "  - ${{ env.IMAGE_NAME }}: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+
+      - name: Notify failure
+        if: needs.build-and-push.result != 'success'
+        run: |
+          echo "❌ Build failed!"
+          exit 1
+  cleanup:
+    name: Cleanup
+    runs-on: [self-hosted, ARM64, hetzner-hel1]
+    needs: [build-and-push, deploy]
+    if: always()
+    steps:
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          rm -rf "$GITHUB_WORKSPACE"/*
+      - name: Pre-build Docker cleanup
+        run: |
+          docker system prune -af --volumes || true
+          docker buildx prune -af || true
