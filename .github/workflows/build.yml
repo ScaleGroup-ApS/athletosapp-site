@@ -73,13 +73,23 @@ jobs:
           KUBE_CONFIG: ${{ secrets.KUBECONFIG }}
         run: |
           mkdir -p $HOME/.kube
-          # Try to decode, assuming base64
-          if echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config 2>/dev/null; then
-             echo "Successfully decoded base64 kubeconfig"
+          echo "$KUBE_CONFIG" > ./kube_raw
+
+          # Attempt to decode
+          if base64 -d ./kube_raw > ./kube_decoded 2>/dev/null; then
+             # Check if decoded content looks like a kubeconfig
+             if grep -q "apiVersion" ./kube_decoded; then
+               echo "Detected Base64 encoded kubeconfig"
+               mv ./kube_decoded $HOME/.kube/config
+             else
+               echo "Decoded content does not look like kubeconfig. Treating input as raw."
+               mv ./kube_raw $HOME/.kube/config
+             fi
           else
-             echo "Not valid base64 (or failed), writing raw content to config"
-             echo "$KUBE_CONFIG" > $HOME/.kube/config
+             echo "Input is not valid base64. Treating as raw."
+             mv ./kube_raw $HOME/.kube/config
           fi
+
           chmod 600 $HOME/.kube/config
 
       - name: Prepare manifests
