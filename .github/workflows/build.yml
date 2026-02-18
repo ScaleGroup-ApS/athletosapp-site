@@ -77,9 +77,9 @@ jobs:
       - name: Prepare manifests
         run: |
           
-          # Calculate NAMESPACE (repo name without -site suffix)
+          # Namespace is the repo name without the -site suffix
           REPO_NAME="${{ github.event.repository.name }}"
-          NAMESPACE="${REPO_NAME}"
+          NAMESPACE=$(echo "$REPO_NAME" | sed 's/-site$//')
           echo "Using namespace: $NAMESPACE"
           
           sed -i "s/{{NAMESPACE}}/$NAMESPACE/g" infra/deployment.yaml
