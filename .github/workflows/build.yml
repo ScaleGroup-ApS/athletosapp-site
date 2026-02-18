@@ -34,6 +34,16 @@ jobs:
           echo "short-sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "Building image with tag: ${SHORT_SHA}"
 
+      - name: Debug Secrets
+        run: |
+          echo "Registry: ${{ env.REGISTRY }}"
+          echo "User: '${{ secrets.REGISTRY_USER }}' (masked)"
+          echo "User length: ${#REGISTRY_USER}"
+          echo "Pass length: ${#REGISTRY_PASSWORD}"
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
