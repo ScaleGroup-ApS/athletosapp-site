@@ -1,195 +1,90 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// WP-REST API Client
-// Runs server-side in React Router loaders.
-// ─────────────────────────────────────────────────────────────────────────────
+export type WPMedia = {
+  id: number;
+  source_url: string;
+  alt_text?: string;
+};
 
-import type {
-  WpPage,
-  WpPost,
-  WpMedia,
-  WpMenuItem,
-  WpSiteInfo,
-} from "./wp-types";
+export type WPPage = {
+  id: number;
+  slug: string;
+  title: string;
+  content: string; // HTML
+};
 
-// ── Configuration ────────────────────────────────────────────────────────────
+export type WPSiteInfo = {
+  name: string;
+  description?: string;
+  url?: string;
+};
 
-/**
- * Base URL for the WordPress REST API.
- * In K8s this points to the internal WordPress service.
- * Override via WP_API_URL env var.
- */
-const WP_API_URL: string =
-  process.env.WP_API_URL || "http://wordpress/wp-json";
+const WP_API = process.env.WP_API_URL || 'https://example.org/wp-json';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-async function wpFetch<T>(path: string, params?: Record<string, string>): Promise<T> {
-  const url = new URL(`${WP_API_URL}${path}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-
-  const res = await fetch(url.toString());
-
-  if (!res.ok) {
-    throw new WpApiError(res.status, `WP-REST ${res.status}: ${path}`);
-  }
-
-  return res.json() as Promise<T>;
-}
-
-export class WpApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = "WpApiError";
-  }
-}
-
-// ── Site Info ────────────────────────────────────────────────────────────────
-
-export async function getSiteInfo(): Promise<WpSiteInfo> {
-  return wpFetch<WpSiteInfo>("/");
-}
-
-// ── Pages ────────────────────────────────────────────────────────────────────
-
-export async function getPages(params?: {
-  per_page?: number;
-  orderby?: string;
-  order?: "asc" | "desc";
-}): Promise<WpPage[]> {
-  return wpFetch<WpPage[]>("/wp/v2/pages", {
-    per_page: String(params?.per_page ?? 100),
-    orderby: params?.orderby ?? "menu_order",
-    order: params?.order ?? "asc",
-    _embed: "true",
-  });
-}
-
-export async function getPageBySlug(slug: string): Promise<WpPage | null> {
-  const pages = await wpFetch<WpPage[]>("/wp/v2/pages", {
-    slug,
-    _embed: "true",
-  });
-  return pages[0] ?? null;
-}
-
-export async function getPageById(id: number): Promise<WpPage> {
-  return wpFetch<WpPage>(`/wp/v2/pages/${id}`, { _embed: "true" });
-}
-
-// ── Posts ─────────────────────────────────────────────────────────────────────
-
-export async function getPosts(params?: {
-  per_page?: number;
-  page?: number;
-  categories?: number[];
-  orderby?: string;
-  order?: "asc" | "desc";
-}): Promise<WpPost[]> {
-  const qs: Record<string, string> = {
-    per_page: String(params?.per_page ?? 10),
-    page: String(params?.page ?? 1),
-    orderby: params?.orderby ?? "date",
-    order: params?.order ?? "desc",
-    _embed: "true",
-  };
-  if (params?.categories?.length) {
-    qs.categories = params.categories.join(",");
-  }
-  return wpFetch<WpPost[]>("/wp/v2/posts", qs);
-}
-
-export async function getPostBySlug(slug: string): Promise<WpPost | null> {
-  const posts = await wpFetch<WpPost[]>("/wp/v2/posts", {
-    slug,
-    _embed: "true",
-  });
-  return posts[0] ?? null;
-}
-
-// ── Media ────────────────────────────────────────────────────────────────────
-
-export async function getMedia(id: number): Promise<WpMedia> {
-  return wpFetch<WpMedia>(`/wp/v2/media/${id}`);
-}
-
-// ── Menus ────────────────────────────────────────────────────────────────────
-
-/**
- * Fetch menu items. Requires the "WP REST API Menus" plugin or
- * WordPress 6.x+ with the navigation block menu endpoints.
- * Falls back to an empty array if the endpoint doesn't exist.
- */
-export async function getMenuItems(
-  menuSlugOrId: string | number,
-): Promise<WpMenuItem[]> {
+async function safeFetch(path: string) {
+  const url = `${WP_API.replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
   try {
-    const items = await wpFetch<WpMenuItem[]>(
-      `/wp/v2/menu-items`,
-      { menus: String(menuSlugOrId), per_page: "100" },
-    );
-    return nestMenuItems(items);
-  } catch {
-    try {
-      const menu = await wpFetch<{ items: WpMenuItem[] }>(
-        `/menus/v1/menus/${menuSlugOrId}`,
-      );
-      return menu.items ?? [];
-    } catch {
-      return [];
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`WP API error ${res.status}`);
     }
+    const json = await res.json();
+    return json;
+  } catch (err) {
+    // bubble up for loader to catch and fallback
+    throw err;
   }
 }
 
-/** Nest flat menu items into a tree by parent ID */
-function nestMenuItems(items: WpMenuItem[]): WpMenuItem[] {
-  const map = new Map<number, WpMenuItem>();
-  const roots: WpMenuItem[] = [];
-
-  for (const item of items) {
-    map.set(item.id, { ...item, children: [] });
-  }
-
-  for (const item of items) {
-    const node = map.get(item.id)!;
-    if (item.parent && map.has(item.parent)) {
-      map.get(item.parent)!.children!.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-
-  return roots;
-}
-
-// ── Front Page ───────────────────────────────────────────────────────────────
-
-/**
- * Get the site's configured front page.
- * Tries the WP settings endpoint first, then falls back to common slugs.
- */
-export async function getFrontPage(): Promise<WpPage | null> {
+export async function getFrontPage(): Promise<WPPage | null> {
   try {
-    const settings = await wpFetch<{
-      show_on_front: string;
-      page_on_front: number;
-    }>("/wp/v2/settings");
-
-    if (settings.show_on_front === "page" && settings.page_on_front > 0) {
-      return getPageById(settings.page_on_front);
+    // Assume a REST endpoint /wp/v2/pages?slug=forside (projects vary) — try common endpoints
+    const pages = await safeFetch('wp/v2/pages?per_page=1');
+    if (Array.isArray(pages) && pages.length) {
+      const p = pages[0];
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title?.rendered ?? 'Forside',
+        content: p.content?.rendered ?? ''
+      };
     }
-  } catch {
-    // Settings endpoint might require authentication — fall back
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function getSiteInfo(): Promise<WPSiteInfo | null> {
+  try {
+    const data = await safeFetch(''); // root of WP REST returns general site info in some setups; fallback to wp/v2
+    if (data && data.name) return { name: data.name, description: data.description, url: data.url };
+  } catch (e) {
+    // ignore and try alternative
   }
 
-  for (const slug of ["forside", "home", "front-page", "frontpage"]) {
-    const page = await getPageBySlug(slug);
-    if (page) return page;
+  try {
+    const alt = await safeFetch('wp/v2/settings');
+    if (alt && alt.title) return { name: alt.title, description: alt.description };
+  } catch (e) {
+    // final fallback
   }
 
-  return null;
+  return { name: 'SYNCRONET ApS', description: 'Athletos Starter — synkronisering af sportsdata.' };
+}
+
+export async function getPageBySlug(slug: string): Promise<WPPage | null> {
+  try {
+    const pages = await safeFetch(`wp/v2/pages?slug=${encodeURIComponent(slug)}&per_page=1`);
+    if (Array.isArray(pages) && pages.length) {
+      const p = pages[0];
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title?.rendered ?? slug,
+        content: p.content?.rendered ?? ''
+      };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
 }
