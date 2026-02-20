@@ -1,6 +1,6 @@
 import React from 'react';
-import { Header } from '~/components/Header';
-import { Footer } from '~/components/Footer';
+import Header from '~/components/Header';
+import Footer from '~/components/Footer';
 import { Section } from '~/components/Section';
 import { getPageBySlug, getSiteInfo } from '~/lib/wp-api';
 
@@ -37,7 +37,7 @@ export default function PageRoute({ data }: any) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header siteName={siteName} menuItems={menu} />
+      <Header />
 
       <main className="flex-1">
         <Section className="pt-16 pb-10">
@@ -48,7 +48,7 @@ export default function PageRoute({ data }: any) {
         </Section>
       </main>
 
-      <Footer siteName={siteName} siteDescription={data?.siteInfo?.description ?? undefined} />
+      <Footer />
     </div>
   );
 }

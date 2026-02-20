@@ -6,8 +6,8 @@
  */
 import type { Route } from "./+types/$";
 import { data } from "react-router";
-import { Header } from "~/components/Header";
-import { Footer } from "~/components/Footer";
+import Header from "~/components/Header";
+import Footer from "~/components/Footer";
 import { WpContent } from "~/components/WpContent";
 import { JsonLd } from "~/components/JsonLd";
 import { getPageBySlug, getSiteInfo } from "~/lib/wp-api";
@@ -70,7 +70,7 @@ export default function CatchAll({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header siteName={siteName} />
+      <Header />
 
       {/* JSON-LD Structured Data */}
       <JsonLd data={buildPageJsonLd({ page, siteInfo, siteUrl })} />
@@ -87,7 +87,7 @@ export default function CatchAll({ loaderData }: Route.ComponentProps) {
         </article>
       </main>
 
-      <Footer siteName={siteName} siteDescription={siteInfo?.description} />
+      <Footer />
     </div>
   );
 }

@@ -1,72 +1,155 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type MenuItem = { title: string; url: string };
+const NAV_LINKS = [
+  { to: '/',         label: 'Forside' },
+  { to: '/tjenester', label: 'Tjenester' },
+];
 
-export function Header({ siteName, menuItems = [] }: { siteName: string; menuItems?: MenuItem[] }) {
-  const [open, setOpen] = useState(false);
+export default function Header() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-sm" style={{ background: 'linear-gradient(180deg, rgba(11,18,32,0.7), rgba(11,18,32,0.55))', borderBottom: '1px solid var(--color-divider)' }}>
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="flex items-center gap-3">
-            <svg width="36" height="36" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <rect width="48" height="48" rx="10" fill="url(#g)" />
-              <path d="M12 30L20 18L32 30" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <defs>
-                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#2DD4BF" />
-                  <stop offset="1" stopColor="#2563EB" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <span className="font-semibold text-lg md:text-xl tracking-tight" style={{ color: 'var(--color-text)' }}>{siteName}</span>
+    <header
+      style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0,
+        zIndex: 100,
+        transition: 'background 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease',
+        background: scrolled
+          ? 'rgba(10, 15, 27, 0.85)'
+          : 'transparent',
+        backdropFilter: scrolled ? 'blur(20px)' : 'none',
+        WebkitBackdropFilter: scrolled ? 'blur(20px)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(48, 57, 77, 0.6)' : '1px solid transparent',
+      }}
+    >
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '4.5rem' }}>
+          {/* Logo */}
+          <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <div style={{
+              width: '2.25rem', height: '2.25rem',
+              borderRadius: '0.625rem',
+              background: 'var(--gradient-main)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(124,75,242,0.4)',
+              flexShrink: 0,
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" fill="white" strokeWidth="0"/>
+              </svg>
+            </div>
+            <span style={{
+              fontFamily: 'var(--font-heading)',
+              fontWeight: 700,
+              fontSize: '1.1875rem',
+              color: 'var(--color-text)',
+              letterSpacing: '-0.01em',
+            }}>
+              AthletoS
+            </span>
           </Link>
-        </div>
 
-        {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-8">
-          {menuItems.map((item) => (
-            <Link key={item.title} to={item.url} className="text-sm font-medium text-muted hover:text-white transition-colors">
-              {item.title}
-            </Link>
-          ))}
+          {/* Desktop nav */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}
+               className="hidden-mobile">
+            {NAV_LINKS.map(link => {
+              const isActive = location.pathname === link.to;
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`nav-link${isActive ? ' active' : ''}`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+            <a
+              href="#cta"
+              className="btn-primary"
+              style={{ padding: '0.625rem 1.5rem', fontSize: '0.875rem' }}
+            >
+              Download appen
+            </a>
+          </nav>
 
-          <Link to="/kontakt" className="btn-primary inline-flex items-center px-4 py-2 text-sm rounded-md shadow-sm hover:scale-[1.02] transition-transform duration-200">
-            Kom i gang
-          </Link>
-        </nav>
-
-        {/* Mobile controls */}
-        <div className="md:hidden">
-          <button onClick={() => setOpen((s) => !s)} aria-label="Menu" className="p-2 rounded-md border border-transparent hover:border-white/10">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-white">
-              <path d="M4 7H20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              <path d="M4 12H20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              <path d="M4 17H20" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          {/* Mobile burger */}
+          <button
+            className="mobile-menu-btn"
+            aria-label="Toggle menu"
+            onClick={() => setMobileOpen(v => !v)}
+            style={{
+              display: 'none',
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '0.5rem', color: 'var(--color-text)',
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {mobileOpen
+                ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+                : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+              }
             </svg>
           </button>
         </div>
       </div>
 
+      {/* Mobile menu */}
       <AnimatePresence>
-        {open && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="md:hidden border-t border-divider">
-            <div className="px-6 pt-4 pb-6 flex flex-col gap-4">
-              {menuItems.map((item) => (
-                <Link key={item.title} to={item.url} onClick={() => setOpen(false)} className="py-2 px-3 rounded-md text-white/90 hover:bg-white/5 transition">
-                  {item.title}
+        {mobileOpen && (
+          <motion.div
+            key="mobile-menu"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              overflow: 'hidden',
+              background: 'rgba(10,15,27,0.97)',
+              backdropFilter: 'blur(20px)',
+              borderTop: '1px solid var(--color-border)',
+            }}
+          >
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {NAV_LINKS.map(link => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`nav-link${location.pathname === link.to ? ' active' : ''}`}
+                  style={{ fontSize: '1.0625rem' }}
+                >
+                  {link.label}
                 </Link>
               ))}
-              <Link to="/kontakt" onClick={() => setOpen(false)} className="btn-primary block text-center py-2 px-3 rounded-md">
-                Kom i gang
-              </Link>
+              <a href="#cta" className="btn-primary" style={{ alignSelf: 'flex-start' }}>
+                Download appen
+              </a>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .hidden-mobile { display: none !important; }
+          .mobile-menu-btn { display: flex !important; }
+        }
+      `}</style>
     </header>
   );
 }
